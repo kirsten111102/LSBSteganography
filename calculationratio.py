@@ -1,79 +1,157 @@
 import wave
 import numpy as np
 import matplotlib.pyplot as plt
+from pathlib import Path
+
+
+class AudioAnalysisError(Exception):
+    pass
+
 
 def load_wav_samples(filepath):
-    """
-    Load 16-bit PCM WAV samples into NumPy array.
-    """
-    with wave.open(filepath, "rb") as wav:
-        n_channels = wav.getnchannels()
-        sample_width = wav.getsampwidth()
-        sample_rate = wav.getframerate()
-        n_frames = wav.getnframes()
 
-        if sample_width != 2:
-            raise ValueError(
-                f"{filepath} is not 16-bit PCM WAV. "
-                f"Detected sample width: {sample_width} bytes"
+    try:
+
+        audio_file = Path(filepath)
+
+        if not audio_file.exists():
+
+            raise AudioAnalysisError(
+                f"WAV file not found: {filepath}"
             )
 
-        frames = wav.readframes(n_frames)
+        with wave.open(str(audio_file), "rb") as wav:
 
-        # 16-bit signed integers
-        samples = np.frombuffer(frames, dtype=np.int16)
+            channels = wav.getnchannels()
 
-    return samples, sample_rate, n_channels
+            sample_width = wav.getsampwidth()
+
+            sample_rate = wav.getframerate()
+
+            frames = wav.readframes(
+                wav.getnframes()
+            )
+
+            if sample_width != 2:
+
+                raise AudioAnalysisError(
+                    f"{filepath} is not 16-bit PCM WAV."
+                )
+
+            samples = np.frombuffer(
+                frames,
+                dtype=np.int16
+            )
+
+        return samples, sample_rate, channels
+
+    except Exception as error:
+
+        raise AudioAnalysisError(
+            f"Failed to load WAV file: {error}"
+        )
+
+
+def validate_audio(
+    original_rate,
+    stego_rate,
+    original_channels,
+    stego_channels
+):
+
+    if original_rate != stego_rate:
+
+        raise AudioAnalysisError(
+            "Sample rates do not match."
+        )
+
+    if original_channels != stego_channels:
+
+        raise AudioAnalysisError(
+            "Channel counts do not match."
+        )
+
+
+def trim_samples(original, stego):
+
+    min_length = min(
+        len(original),
+        len(stego)
+    )
+
+    return (
+        original[:min_length],
+        stego[:min_length]
+    )
+
 
 def calculate_snr(original, stego):
-    """
-    Signal-to-Noise Ratio in dB.
-    Higher = better transparency.
-    """
-    noise = original.astype(np.float64) - stego.astype(np.float64)
 
-    signal_power = np.sum(original.astype(np.float64) ** 2)
+    noise = (
+        original.astype(np.float64)
+        - stego.astype(np.float64)
+    )
+
+    signal_power = np.sum(
+        original.astype(np.float64) ** 2
+    )
 
     noise_power = np.sum(noise ** 2)
 
     if noise_power == 0:
+
         return float("inf")
 
-    return 10 * np.log10(signal_power / noise_power)
+    return 10 * np.log10(
+        signal_power / noise_power
+    )
 
 
 def calculate_mse(original, stego):
-    """
-    Mean Squared Error.
-    Lower = better transparency.
-    """
+
     return np.mean(
-        (original.astype(np.float64) - stego.astype(np.float64)) ** 2
+        (
+            original.astype(np.float64)
+            - stego.astype(np.float64)
+        ) ** 2
     )
 
 
 def calculate_psnr(original, stego):
-    """
-    Peak Signal-to-Noise Ratio.
-    """
-    mse = calculate_mse(original, stego)
+
+    mse = calculate_mse(
+        original,
+        stego
+    )
 
     if mse == 0:
+
         return float("inf")
 
-    max_sample = 32767.0
+    return 10 * np.log10(
+        (32767.0 ** 2) / mse
+    )
 
-    return 10 * np.log10((max_sample ** 2) / mse)
 
-def plot_waveforms(original, stego, sample_rate, num_samples=5000):
-    """
-    Plot original vs stego waveform.
-    """
-    time_axis = np.arange(num_samples) / sample_rate
+def plot_waveforms(
+    original,
+    stego,
+    sample_rate,
+    num_samples=5000
+):
+
+    time_axis = (
+        np.arange(num_samples)
+        / sample_rate
+    )
 
     plt.figure(figsize=(14, 5))
 
-    plt.plot(time_axis, original[:num_samples], label="Original")
+    plt.plot(
+        time_axis,
+        original[:num_samples],
+        label="Original"
+    )
 
     plt.plot(
         time_axis,
@@ -83,39 +161,62 @@ def plot_waveforms(original, stego, sample_rate, num_samples=5000):
     )
 
     plt.xlabel("Time (seconds)")
+
     plt.ylabel("Amplitude")
-    plt.title("Original vs Stego Waveform")
+
+    plt.title(
+        "Original vs Stego Waveform"
+    )
+
     plt.legend()
 
     plt.tight_layout()
+
     plt.show()
 
 
-def plot_difference(original, stego, sample_rate, num_samples=5000):
-    """
-    Plot difference waveform.
-    Expected mostly -1, 0, +1 for 1-LSB.
-    """
-    difference = stego[:num_samples] - original[:num_samples]
+def plot_difference(
+    original,
+    stego,
+    sample_rate,
+    num_samples=5000
+):
 
-    time_axis = np.arange(num_samples) / sample_rate
+    difference = (
+        stego[:num_samples]
+        - original[:num_samples]
+    )
+
+    time_axis = (
+        np.arange(num_samples)
+        / sample_rate
+    )
 
     plt.figure(figsize=(14, 4))
 
-    plt.plot(time_axis, difference)
+    plt.plot(
+        time_axis,
+        difference
+    )
 
     plt.xlabel("Time (seconds)")
-    plt.ylabel("Amplitude Difference")
-    plt.title("Waveform Difference (Stego - Original)")
+
+    plt.ylabel("Difference")
+
+    plt.title(
+        "Waveform Difference"
+    )
 
     plt.tight_layout()
+
     plt.show()
 
 
-def plot_histogram_difference(original, stego):
-    """
-    Compare sample value distributions.
-    """
+def plot_histogram(
+    original,
+    stego
+):
+
     plt.figure(figsize=(14, 5))
 
     plt.hist(
@@ -133,84 +234,171 @@ def plot_histogram_difference(original, stego):
     )
 
     plt.xlabel("Sample Value")
+
     plt.ylabel("Frequency")
-    plt.title("Histogram Comparison")
+
+    plt.title(
+        "Histogram Comparison"
+    )
+
     plt.legend()
 
     plt.tight_layout()
+
     plt.show()
 
-def print_report(snr, mse, psnr):
-    """
-    Print transparency analysis report.
-    """
-    print("===== STEGANOGRAPHY TRANSPARENCY REPORT =====")
 
-    print(f"SNR  : {snr:.4f} dB")
-    print(f"MSE  : {mse:.8f}")
-    print(f"PSNR : {psnr:.4f} dB")
+def generate_report(snr):
 
     if snr == float("inf"):
-        print("Result: No detectable difference.")
 
-    elif snr > 50:
-        print("Result: Excellent transparency (virtually inaudible).")
+        return (
+            "No detectable difference."
+        )
 
-    elif snr > 40:
-        print("Result: Very good transparency.")
+    if snr > 50:
 
-    elif snr > 30:
-        print("Result: Moderate transparency.")
+        return (
+            "Excellent transparency "
+            "(virtually inaudible)."
+        )
 
-    else:
-        print("Result: Noticeable distortion may exist.")
+    if snr > 40:
+
+        return (
+            "Very good transparency."
+        )
+
+    if snr > 30:
+
+        return (
+            "Moderate transparency."
+        )
+
+    return (
+        "Noticeable distortion may exist."
+    )
+
+
+def analyze_audio(
+    original_audio_path,
+    stego_audio_path,
+    show_waveforms=True,
+    show_difference=True,
+    show_histogram=True
+):
+
+    try:
+
+        (
+            original_samples,
+            sample_rate,
+            original_channels
+        ) = load_wav_samples(
+            original_audio_path
+        )
+
+        (
+            stego_samples,
+            stego_rate,
+            stego_channels
+        ) = load_wav_samples(
+            stego_audio_path
+        )
+
+        validate_audio(
+            sample_rate,
+            stego_rate,
+            original_channels,
+            stego_channels
+        )
+
+        (
+            original_samples,
+            stego_samples
+        ) = trim_samples(
+            original_samples,
+            stego_samples
+        )
+
+        snr = calculate_snr(
+            original_samples,
+            stego_samples
+        )
+
+        mse = calculate_mse(
+            original_samples,
+            stego_samples
+        )
+
+        psnr = calculate_psnr(
+            original_samples,
+            stego_samples
+        )
+
+        result = generate_report(snr)
+
+        print(
+            "===== STEGANOGRAPHY "
+            "TRANSPARENCY REPORT ====="
+        )
+
+        print(f"SNR  : {snr:.4f} dB")
+
+        print(f"MSE  : {mse:.8f}")
+
+        print(f"PSNR : {psnr:.4f} dB")
+
+        print(f"Result: {result}")
+
+        if show_waveforms:
+
+            plot_waveforms(
+                original_samples,
+                stego_samples,
+                sample_rate
+            )
+
+        if show_difference:
+
+            plot_difference(
+                original_samples,
+                stego_samples,
+                sample_rate
+            )
+
+        if show_histogram:
+
+            plot_histogram(
+                original_samples,
+                stego_samples
+            )
+
+        return {
+            "success": True,
+            "snr": snr,
+            "mse": mse,
+            "psnr": psnr,
+            "result": result
+        }
+
+    except AudioAnalysisError as error:
+
+        return {
+            "success": False,
+            "message": str(error)
+        }
 
 
 if __name__ == "__main__":
-    ORIGINAL_FILE = "./audio/红线.wav"
-    STEGO_FILE = "encoded.wav"
 
-    original_samples, sample_rate, channels = load_wav_samples(
-        ORIGINAL_FILE
+    result = analyze_audio(
+        original_audio_path="./audio/红线.wav",
+        stego_audio_path="encoded.wav"
     )
 
-    stego_samples, stego_rate, stego_channels = load_wav_samples(
-        STEGO_FILE
-    )
+    if not result["success"]:
 
-    if sample_rate != stego_rate:
-        raise ValueError("Sample rates do not match.")
-
-    if channels != stego_channels:
-        raise ValueError("Channel counts do not match.")
-
-    min_length = min(len(original_samples), len(stego_samples))
-
-    original_samples = original_samples[:min_length]
-
-    stego_samples = stego_samples[:min_length]
-
-    snr = calculate_snr(original_samples, stego_samples)
-
-    mse = calculate_mse(original_samples, stego_samples)
-
-    psnr = calculate_psnr(original_samples, stego_samples)
-
-    print_report(snr, mse, psnr)
-
-    plot_waveforms(
-        original_samples,
-        stego_samples,
-        sample_rate
-    )
-
-    plot_difference(
-        original_samples,
-        stego_samples,
-        sample_rate
-    )
-
-    plot_histogram_difference(
-        original_samples,
-        stego_samples
-    )
+        print(
+            f"Error: {result['message']}"
+        )
