@@ -34,4 +34,4 @@ class ComparePage(ctk.CTkFrame):
 
     def compare_files(self):
         result = run_compare(self.original_path, self.stego_path)
-        self.result_label.configure(text=result)
+        self.result_label.configure(text=result["message"])

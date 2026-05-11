@@ -37,4 +37,4 @@ class EncodePage(ctk.CTkFrame):
 
     def start_encoding(self):
         result = run_encode(self.carrier_path, self.hidden_path, self.format_option.get())
-        self.result_label.configure(text=result)
+        self.result_label.configure(text="Encoding completed successfully." if result["success"] else f"Encoding failed: {result['message']}")

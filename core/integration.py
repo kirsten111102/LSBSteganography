@@ -8,7 +8,8 @@ def run_encode(
     carrier_path,
     hidden_path,
     output_binary="result.txt",
-    convert_to_mp3=True
+    convert_to_mp3=True,
+    export_wav=True
 ):
 
     digital_result = process_digital_signal(
@@ -22,14 +23,19 @@ def run_encode(
 
         return {
             "success": False,
+            "stage": "digital_signal",
             "message": digital_result["message"]
         }
 
     stego_result = process_steganography(
-        audio_binary_path="binary.txt",
-        hidden_file_path="hiddenfile.txt",
+        audio_binary_path=digital_result[
+            "binary_output_path"
+        ],
+        hidden_file_path=digital_result[
+            "hidden_output_path"
+        ],
         output_file_path=output_binary,
-        export_wav=True,
+        export_wav=export_wav,
         convert_to_mp3=convert_to_mp3
     )
 
@@ -37,27 +43,20 @@ def run_encode(
 
         return {
             "success": False,
+            "stage": "steganography",
             "message": stego_result["message"]
         }
 
     return {
         "success": True,
-        "message": "Encoding completed successfully.",
-        "hidden_type": digital_result["hidden_type"],
-        "encoded_wav": "encoded.wav",
-        "encoded_mp3": (
-            "encoded.mp3"
-            if convert_to_mp3
-            else None
-        ),
-        "result_file": output_binary
+        "message": "Steganography embedding complete."
     }
 
 
 def run_decode(
     encoded_file,
-    output_name="recovered",
-    hidden_type="text"
+    hidden_type,
+    output_name="recovered"
 ):
 
     result = process_hidden_recovery(
@@ -70,6 +69,7 @@ def run_decode(
 
         return {
             "success": False,
+            "stage": "recovery",
             "message": result["message"]
         }
 
@@ -82,30 +82,36 @@ def run_decode(
 
 def run_compare(
     original_audio,
-    stego_audio
+    stego_audio,
+    show_waveforms=True,
+    show_difference=True,
+    show_histogram=True
 ):
 
     result = analyze_audio(
         original_audio_path=original_audio,
         stego_audio_path=stego_audio,
-        show_waveforms=True,
-        show_difference=True,
-        show_histogram=True
+        show_waveforms=show_waveforms,
+        show_difference=show_difference,
+        show_histogram=show_histogram
     )
 
     if not result["success"]:
 
         return {
             "success": False,
+            "stage": "analysis",
             "message": result["message"]
         }
 
     return {
         "success": True,
-        "snr": result["snr"],
-        "mse": result["mse"],
-        "psnr": result["psnr"],
-        "result": result["result"]
+        "message": (
+            f"SNR: {result['snr']:.2f} dB\n"
+            f"MSE: {result['mse']:.2f}\n"
+            f"PSNR: {result['psnr']:.2f} dB\n"
+            f"Result: {result['result']}"
+        )
     }
 
 
@@ -117,19 +123,28 @@ if __name__ == "__main__":
         convert_to_mp3=True
     )
 
+    print("\n===== ENCODE RESULT =====")
     print(encode_result)
 
-    decode_result = run_decode(
-        encoded_file="encoded.wav",
-        output_name="decoded_text",
-        hidden_type="text"
-    )
+    if encode_result["success"]:
 
-    print(decode_result)
+        decode_result = run_decode(
+            encoded_file="encoded.wav",
+            hidden_type=encode_result[
+                "hidden_type"
+            ],
+            output_name="decoded_text"
+        )
 
-    compare_result = run_compare(
-        original_audio="./audio/红线.wav",
-        stego_audio="encoded.wav"
-    )
+        print("\n===== DECODE RESULT =====")
+        print(decode_result)
 
-    print(compare_result)
+    if encode_result["success"]:
+
+        compare_result = run_compare(
+            original_audio="./audio/红线.wav",
+            stego_audio="encoded.wav"
+        )
+
+        print("\n===== ANALYSIS RESULT =====")
+        print(compare_result)
